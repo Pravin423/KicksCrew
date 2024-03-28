@@ -1,0 +1,52 @@
+/** Shopify CDN: Minification failed
+
+Line 16:1 Transforming async functions to the configured target environment ("es5") is not supported yet
+Line 19:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 20:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 20:8 Transforming destructuring to the configured target environment ("es5") is not supported yet
+Line 22:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 27:19 Transforming object literal extensions to the configured target environment ("es5") is not supported yet
+Line 32:19 Transforming object literal extensions to the configured target environment ("es5") is not supported yet
+Line 32:20 Transforming destructuring to the configured target environment ("es5") is not supported yet
+Line 35:18 Transforming object literal extensions to the configured target environment ("es5") is not supported yet
+Line 35:19 Transforming destructuring to the configured target environment ("es5") is not supported yet
+... and 6 more hidden warnings
+
+**/
+(async function(algolia) {
+  'use strict';
+  
+  const createQuerySuggestionsPlugin = algolia.externals.createQuerySuggestionsPlugin;
+  const { config, translations, headerTemplate, suggestionsTemplate } = algolia;
+
+  const index_suffix = await config.index_suffix;
+
+  algolia.querySuggestionsPlugin = createQuerySuggestionsPlugin({
+    searchClient: algolia.searchClient,
+    indexName: config.query_suggestions_index_name,
+    getSearchParams() {
+      return {
+        hitsPerPage: config.suggestions_autocomplete_hits_per_page,
+      };
+    },
+    transformSource({ source }) {
+      return {
+        ...source,
+        getItemUrl({ item }) {
+          return `${window.Shopify.routes.root}search?q=${encodeURIComponent(item.query)}`;
+        },
+        templates: {
+          ...source.templates,
+          header({ html, state }) {
+            const resource = translations.suggestions;
+            return headerTemplate({ html, state }, resource);
+          },
+          item(params) {
+            const { item, html, components } = params;
+            return suggestionsTemplate({ item, html, components });
+          },
+        },
+      };
+    }
+  });
+})(window.algoliaShopify);

@@ -1,0 +1,21 @@
+/** Shopify CDN: Minification failed
+
+Line 8:2 Transforming let to the configured target environment ("es5") is not supported yet
+Line 16:4 Transforming const to the configured target environment ("es5") is not supported yet
+
+**/
+function makeRequest(method, url) {
+  let xhr = new XMLHttpRequest();
+  xhr.open(method, url, false); // `false` makes the request synchronous
+  xhr.setRequestHeader("Accept", "application/json");
+  xhr.send(null);
+}
+
+function emptyCart() {
+  try {
+    const res = makeRequest("GET", "/cart/clear");
+    console.log("empty cart done");
+  } catch (err) {
+    console.log(err);
+  }
+}

@@ -1,0 +1,137 @@
+/** Shopify CDN: Minification failed
+
+Line 16:1 Transforming async functions to the configured target environment ("es5") is not supported yet
+Line 21:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 23:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 28:4 Transforming const to the configured target environment ("es5") is not supported yet
+Line 29:4 Transforming const to the configured target environment ("es5") is not supported yet
+Line 34:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 37:4 Transforming const to the configured target environment ("es5") is not supported yet
+Line 42:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 42:8 Transforming destructuring to the configured target environment ("es5") is not supported yet
+Line 43:2 Transforming const to the configured target environment ("es5") is not supported yet
+... and 23 more hidden warnings
+
+**/
+(async function(algolia) {
+  'use strict';
+
+  if (!algolia.config.autocomplete_enabled) return;
+
+  const autocomplete = algolia.externals.autocomplete;
+
+  const index_suffix = await algolia.config.index_suffix;
+
+  algolia.searchClient.addAlgoliaAgent('Shopify Integration');
+
+  if (algolia.config.dynamic_selector) {
+    const search_url = algolia?.shopify?.routes?.search_url || `${window.Shopify.routes.root}/search`;
+    const default_form_search = `form[action="${search_url}"]`;
+    algolia.config.input_selector += `, ${default_form_search}`;
+  }
+  
+  // Retrieve the container from Shopify's config
+  const containers = Array.from(document.querySelectorAll(algolia.config.input_selector));
+  containers.forEach(container => {
+    container.innerHTML = ''
+    const containerClasses = container.classList;
+    containerClasses.add('aa-MainContainer');
+  });
+
+  // Set plugins
+  const { productsPlugin, collectionsPlugin, querySuggestionsPlugin } = algolia;
+  const plugins = [
+    algolia.config.index_products && productsPlugin,
+    algolia.config.index_collections && collectionsPlugin,
+    algolia.config.autocomplete_query_suggestions && querySuggestionsPlugin
+  ];
+
+  const cssFile = document.getElementById('template_algolia_autocomplete.css');
+  //Set CSS variables
+  document.documentElement.style.setProperty(`--aa-text-color-rgb`, `${algolia.helpers.hexToRGB(algolia.config.colors.secondary)}`);
+  document.documentElement.style.setProperty(`--aa-primary-color-rgb`, `${algolia.helpers.hexToRGB(algolia.config.colors.main)}`);
+  document.documentElement.style.setProperty(`--aa-muted-color-rgb`, `${algolia.helpers.hexToRGB(algolia.config.colors.muted)}`);
+  document.documentElement.style.setProperty(`--aa-highlight-color-rgb`, `${algolia.helpers.hexToRGB(algolia.config.colors.highlight)}`);
+  //Link CSS
+  algolia.appendStyle(cssFile.text);
+
+  let hasAddedTrackingEventHandler;
+
+  const autocompleteOptions = {
+    openOnFocus: true,
+    debug: algolia.config.autocomplete_debug,
+    insights: algolia.config.analytics_enabled,
+    placeholder: 'Find Your Pair',
+    detachedMediaQuery: 'none',
+    panelPlacement: 'full-width',
+    plugins,
+    render: ({ elements, render, html, state }, root) => {
+      const sourceIdsToExclude = ['products'];
+      const hasLeftPanelResults = state.collections
+        .filter(({ source }) => sourceIdsToExclude.indexOf(source.sourceId) === -1)
+        .reduce((prev, curr) => prev + curr.items.length, 0) > 0;
+      const [querySuggestionsPluginResults] = state.collections.filter(({source}) => source.sourceId === 'querySuggestionsPlugin');
+      const displaySuggestions = algolia.config.autocomplete_query_suggestions && querySuggestionsPluginResults.items.length > 0;
+      render(
+        hasLeftPanelResults
+          ? algolia.mainTemplate({ html, state }, elements, displaySuggestions)
+          : algolia.mainProductsTemplate({ html, state }, elements),
+        root
+      );
+      // send mixpanel events
+      const mixpanelTrackingArea = document.querySelector('.aa-PanelSections');
+      if (mixpanelTrackingArea && !hasAddedTrackingEventHandler) {
+        mixpanelTrackingArea.addEventListener('click', (e) => {
+          const parentAEl = e.target.closest('a');
+          if (parentAEl && parentAEl.dataset.type) {
+            const currentSearchTerm = document.querySelector('.aa-Input').value;
+            const sendObj = {
+              keywords: currentSearchTerm,
+              clickSuggestType: parentAEl.dataset.type,
+              title: parentAEl.dataset.title,
+            };
+              mixpanel.track('Search Suggest', sendObj);
+          };
+        });
+        hasAddedTrackingEventHandler = true;
+      };
+
+      const panelSectionEl = document.querySelector('.aa-PanelSections') || document.querySelector('.aa-PanelSection');
+      if (panelSectionEl) {
+        const { bottom } = panelSectionEl.getBoundingClientRect();
+        const heightVal = bottom <= (window.innerHeight * 0.75) ? 'max-content' : null;
+  
+        const panelLayoutEl = document.querySelector('.aa-PanelLayout');
+        const panelEl = document.querySelector('.aa-Panel');
+        if (heightVal) {
+          panelLayoutEl.style.height = heightVal;
+          panelEl.style.height = heightVal;
+        } else {
+          if (getComputedStyle(panelLayoutEl).height) panelLayoutEl.style.height = null;
+          if (getComputedStyle(panelEl).height) panelEl.style.height = null;
+        }
+      }
+    },
+    renderNoResults: ({ render, html, state }, root) => {
+      if(state.query !== ""){
+        render(
+          algolia.noResultsTemplate({ html, state }),
+          root
+        );
+      }
+    },
+    onSubmit: ({ state }) => {
+      mixpanel.track('Product Search', {
+        keywords: state.query,
+      });
+      window.location.href = `${window.Shopify.routes.root}search?q=${encodeURIComponent(state.query)}`;
+    }
+  };
+  
+  containers.forEach(container => {
+    autocomplete({
+      container,
+      ...autocompleteOptions
+    });
+  });
+})(window.algoliaShopify);

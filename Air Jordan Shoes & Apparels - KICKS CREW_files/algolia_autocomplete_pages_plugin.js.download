@@ -1,0 +1,58 @@
+/** Shopify CDN: Minification failed
+
+Line 16:1 Transforming async functions to the configured target environment ("es5") is not supported yet
+Line 19:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 20:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 20:8 Transforming destructuring to the configured target environment ("es5") is not supported yet
+Line 22:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 25:14 Transforming object literal extensions to the configured target environment ("es5") is not supported yet
+Line 25:15 Transforming destructuring to the configured target environment ("es5") is not supported yet
+Line 29:18 Transforming object literal extensions to the configured target environment ("es5") is not supported yet
+Line 45:18 Transforming object literal extensions to the configured target environment ("es5") is not supported yet
+Line 45:19 Transforming destructuring to the configured target environment ("es5") is not supported yet
+... and 4 more hidden warnings
+
+**/
+(async function(algolia) {
+  'use strict';
+
+  const getAlgoliaResults = algolia.externals.getAlgoliaResults;
+  const { config, translations, headerTemplate, pagesTemplate } = algolia;
+
+  const index_suffix = await config.index_suffix;
+
+  algolia.pagesPlugin = {
+    getSources({ query }) {
+      return [
+        {
+          sourceId: 'pages',
+          getItems() {
+            return getAlgoliaResults({
+              searchClient: algolia.searchClient,
+              queries: [
+                {
+                  indexName: config.index_prefix + 'pages',
+                  query,
+                  params: {
+                    hitsPerPage: config.pages_autocomplete_hits_per_page,
+                    clickAnalytics: config.analytics_enabled
+                  },
+                },
+              ],
+            });
+          },
+          templates: {
+            header({ html, state }) {
+              const resource = translations.pages;
+              return headerTemplate({ html, state }, resource);
+            },
+            item({ item, html, components }) {
+              const itemLink = `${window.Shopify.routes.root}pages/${item.handle}`;
+              return pagesTemplate({ item, html, components }, itemLink);
+            },
+          },
+        }
+      ];
+    },
+  }
+})(window.algoliaShopify);

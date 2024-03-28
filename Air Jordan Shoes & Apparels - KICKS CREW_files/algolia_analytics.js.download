@@ -1,0 +1,137 @@
+/** Shopify CDN: Minification failed
+
+Line 16:1 Transforming async functions to the configured target environment ("es5") is not supported yet
+Line 18:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 20:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 22:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 26:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 27:2 Transforming let to the configured target environment ("es5") is not supported yet
+Line 41:8 Transforming const to the configured target environment ("es5") is not supported yet
+Line 51:2 Transforming const to the configured target environment ("es5") is not supported yet
+Line 63:6 Transforming const to the configured target environment ("es5") is not supported yet
+Line 64:6 Transforming const to the configured target environment ("es5") is not supported yet
+... and 13 more hidden warnings
+
+**/
+(async function(algolia) {
+  'use strict';
+  const insightsClient = window[window.AlgoliaAnalyticsObject];
+
+  const index_suffix = await algolia.config.index_suffix;
+
+  const enabled = algolia.config.analytics_enabled;
+  if (!enabled || !insightsClient) return;
+
+  // useCookie parameter set up
+  const userTokenAdminSetting = algolia.config.usertoken_with_cookies === 'enabled';
+  let useCookie = false;
+
+  if(userTokenAdminSetting) {
+    window.Shopify.loadFeatures(
+      [
+        {
+          name: 'consent-tracking-api',
+          version: '0.1',
+        },
+      ],
+      error => {
+        if (error) {
+          console.error("Customer Privacy API Error", error);
+        }
+        const userCanBeTracked = window.Shopify.customerPrivacy ? window.Shopify.customerPrivacy.userCanBeTracked() : false;
+        useCookie = userTokenAdminSetting && userCanBeTracked;
+        insightsClient('init', {useCookie, partial: true});
+      },
+    );
+  } else {
+    insightsClient('init', {useCookie: useCookie, partial: true});
+  }
+
+  // Local storage logic for conversion events
+  const localStorageKey = 'algolia_analytics_clicked_objects';
+
+  /**
+   * Saves details in local storage for conversion tracking
+   */
+  algolia.saveForConversionTracking = function (data) {
+    /**
+     * We're using a try, catch here to handle any possible exceptions
+     * resulting from local storage or JSON parsing.
+     */
+    try {
+      // Get any data previously stored
+      const previousClickItemsString = localStorage.getItem(localStorageKey) || '[]';
+      const previousClickItems = JSON.parse(previousClickItemsString);
+
+      // Add the current products data to local storage
+      previousClickItems.push(data)
+      localStorage.setItem(localStorageKey, JSON.stringify(previousClickItems))
+    } catch (error) {
+      console.error(error);
+      // No need to do anything in this scenario
+    }
+  };
+
+  /**
+   * Try to get the details from local storage for conversion tracking.
+   * We're using a try...catch here to handle any possible exceptions resulting
+   * from local storage or JSON parsing.
+   */
+  function trackConversion({ title, variantId, sku }) {
+    try {
+      // Get any previously stored data.
+      const previousClickItemsString = localStorage.getItem(localStorageKey);
+      // If data was found, send a conversion event for those products.
+      if (!!previousClickItemsString) {
+        const previousClickItems = JSON.parse(previousClickItemsString);
+        previousClickItems.forEach((data) => {
+          const { modelNo } = data;
+
+          if (title.includes(modelNo)) {
+            insightsClient('init', {
+              appId: algolia.config.app_id, 
+              apiKey: algolia.config.search_api_key,
+              useCookie,
+              partial: true
+            });
+            insightsClient('convertedObjectIDsAfterSearch', {
+              ...data,
+              variantId,
+              sku,
+            });
+          }
+        })
+      }
+    } catch (error) {
+      console.error(error);
+      // No need to do anything in this scenario.
+    }
+
+    // Try to remove the items from local storage.
+    try {
+      localStorage.removeItem(localStorageKey)
+    } catch (error) {
+      // No need to do anything in this scenario.
+    }
+  }
+
+  /**
+   *Track a conversion event when clicking the 'add to cart' button.
+   *Change the query selector to be the correct one for your theme.
+   */
+  const addToCartBtn = document.querySelector('#add_to_cart');
+  if (addToCartBtn) {
+    addToCartBtn.addEventListener('click', function (e) {
+      const selectEl = document.querySelector('select[name="id"].original-selector');
+      const [{
+        title,
+        variants,
+      }] = Object.values(window.theme.productData);
+      const {
+        id: variantId,
+        sku,
+      } = variants.find(({ id }) => id === +selectEl.value) || {};
+      trackConversion({ title, variantId, sku });
+    })
+  }
+})(window.algoliaShopify);
